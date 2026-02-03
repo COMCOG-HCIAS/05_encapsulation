@@ -20,7 +20,7 @@ response_vec <- c("TRT","FRT","RRT")
 \input{0_tex/1_titlepage}
 \createTitlepage{Anaphoric Encapsulation
 }{Outlier information \& Description
-}{Henri Funk \\ Helen Alber
+}{Marie Scherzer\\Lona Koers
 }
 
 

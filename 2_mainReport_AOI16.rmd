@@ -53,7 +53,7 @@ hypo_list <- NULL
 \input{0_tex/1_titlepage}
 \createTitlepage{Anaphoric Encapsulation
 }{Reading time \& Discourse particle analysis
-}{Henri Funk \\ Helen Alber \\Marie Scherzer\\Lona Koers
+}{Marie Scherzer\\Lona Koers
 }
 
 \input{0_tex/2_introduction}
