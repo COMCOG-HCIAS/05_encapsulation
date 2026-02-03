@@ -1,0 +1,458 @@
+---
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+documentclass: report
+geometry: margin=2cm
+editor_options:
+  chunk_output_type: console
+---
+
+```{r rmd setup, include=FALSE}
+knitr::opts_chunk$set(echo    = FALSE,
+                      cache   = TRUE,
+                      message = FALSE)
+options(knitr.kable.NA = "")
+```
+
+```{r global settings, include=FALSE}
+# include model details (smooth effects, residual plots etc.)
+model_details <- T
+# response variables
+response_vec <- c("TRT","FRT","RRT")
+# define for which models the 'letters per word' effect should be estimated
+# nonlinearly (default: all)
+nonlinear_effect <- c("TRT","FRT","RRT") # set to c() to estimate all effects as linear effects
+# complete remove the 'letters per word' effect in a model?
+# Use case: Re-reading time models often show negligibly small effects, which
+#           can lead to negative predicted values in the case of too many
+#           zero observations. In these cases, removing the word effect makes sense.
+no_effect <- c() # set to c("RRD") to remove the word effect for RRD
+# AOI.conditions per model
+AOIcond_list <- list(
+  "Model1" = c(
+  "RC_1", "RE_1", "SC_1", "SE_1",
+  "RC_2", "RE_2", "SC_2", "SE_2",
+  "RC_3", "RE_3", "SC_3", "SE_3",
+  "RC_4", "RE_4", "SC_4", "SE_4",
+  "RC_5", "RE_5", "SC_5", "SE_5",
+  "RC_6", "RE_6", "SC_6", "SE_6",
+  "RC_7", "RE_7", "SC_7", "SE_7",
+  "RC_8", "RE_8", "SC_8", "SE_8",
+  "RC_9", "RE_9", "SC_9", "SE_9"
+  )
+)
+### hypotheses, each comparing two AOI.conditions
+# in case of no hypotheses at all: 'h_list <- NULL'
+# in case of no hypotheses for model X: Simply create no list entry with name 'ModelX'
+hypo_list <- NULL
+```
+
+
+\input{0_tex/1_titlepage}
+\createTitlepage{Anaphoric Encapsulation
+}{Reading time \& Discourse particle analysis
+}{ Henri Funk \\ Helen Alber
+}
+
+\input{0_tex/2_introduction}
+
+
+```{r R setup, warning=FALSE}
+# load packages
+library(knitr)        # output table editing etc.
+library(tidyverse)    # data management and ggplot2
+library(DPKogHelpers) # Helper functions for the DPKog project
+library(mgcv)         # Additive regression models
+theme_set(theme_bw()) # set global theme for ggplot2 plots
+
+# define paths
+path_prepData  <- "0_data/2_preparedData/"
+path_resTables <- "2_resultFiles/tables/"
+path_resImages <- "2_resultFiles/images/"
+```
+
+
+```{r read prepared data}
+dat <- read.csv2(paste0(path_prepData, "data_prepared.csv"), fileEncoding = "utf-8")
+# calculate mean nLetters.WD
+nLetters.WD <- round(mean(dat$nLetters.WD), 2)
+# ensure that Participant and Topic are encoded as factor variables
+dat <- dat %>%
+  mutate(Participant = factor(Participant),
+         Topic       = factor(Topic))
+```
+
+```{r further data preparation}
+AOIcond_vec <- unique(unlist(AOIcond_list))
+dat <- dat %>% filter(AOI.condition %in% AOIcond_vec) %>%
+    mutate(AOI.condition = factor(AOI.condition, levels = AOIcond_vec))
+```
+
+
+\newpage
+#### Letters per word (with the average letters per word as horizontal line)
+```{r plot nLetters.WD, fig.height=4}
+# ALL IN ONE:
+# ggplot(dat,
+#   aes(x = AOI.condition, y = nLetters.WD)) +
+#   geom_boxplot() +
+#   theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 6)) +
+#   ylab("Letters per word") +
+#   geom_hline(yintercept = nLetters.WD, lty = 2)
+
+ggplot(dat[dat$AOI.condition %in% levels(dat$AOI.condition)[1:18], ],
+  aes(x = AOI.condition, y = nLetters.WD)) +
+  geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 6)) +
+  ylab("Letters per word") +
+  geom_hline(yintercept = nLetters.WD, lty = 2)
+
+ggplot(dat[dat$AOI.condition %in% levels(dat$AOI.condition)[19:36], ],
+  aes(x = AOI.condition, y = nLetters.WD)) +
+  geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 6)) +
+  ylab("Letters per word") +
+  geom_hline(yintercept = nLetters.WD, lty = 2)
+```
+
+#### Observations per AOI.condition
+```{r table aoi.conditions}
+freq <- sapply(AOIcond_vec, function(AOIcond) {
+  length(unique(dat$observation[dat$AOI.condition == AOIcond]))
+})
+tab <- data.frame("AOI.condition" = AOIcond_vec,
+                  "Freq" = unname(freq))
+knitr::kable(tab)
+```
+
+
+
+\newpage
+```{r model estimation, results = 'asis', cache = TRUE}
+# In order to estimate the nLetters.WD effect as good as possible all AOI.conditions are thrown together into one big model. The following model_list contains this big model once for each specified model. Only if the intercept between two models differs, then the big model is reestimated.
+model_list <- lapply(seq_len(length(AOIcond_list)), function(i) {
+  m_list <- lapply(seq_len(length(response_vec)), function(j) {
+    message(paste0("Estimate model ",i,"_",response_vec[j],"..."))
+    # check if the current model has the same intercept as one of the previous models
+    same_intercept_index <- ifelse(i == 1, NA, match(AOIcond_list[[i]][1], sapply(AOIcond_list[1:(i-1)], function(x) x[1])))
+    # only reestimate the model if none was estimated before or if the intercept changed compared to previous models
+    if (!is.na(same_intercept_index)) { # no reestimation necessary
+      return(paste0(same_intercept_index,"_",j))
+    } else { # estimation necessary
+      dat_i <- dat %>% mutate(AOI.condition = relevel(AOI.condition, ref = AOIcond_list[[i]][1]))
+      fm_covars <- "~ AOI.condition"
+      if (!(response_vec[j] %in% no_effect)) { # add 'letters per word' effect
+        if (response_vec[j] %in% nonlinear_effect) {
+          fm_covars <- paste(fm_covars, "+ s(nLetters.WD, bs='ps', k = 4)")
+        } else { # RRT and TRT
+          fm_covars <- paste(fm_covars, "+ nLetters.WD")
+        }
+      }
+      fm_covars <- paste(fm_covars, "+ s(Topic, bs='re') + s(Participant, bs='re')")
+      fm <- as.formula(paste0(response_vec[j], ".WD", fm_covars))
+      bam(fm, data = dat_i, method = "REML", nthreads = 10)
+    }
+  })
+  names(m_list) <- response_vec
+  m_list
+})
+names(model_list) <- paste0("Model", seq_len(length(model_list)))
+
+# copy the models where no reestimation was necessary as of equal intercepts
+if (length(model_list) > 1) {
+  for (i in 2:length(model_list)) {
+    for (j in 1:length(model_list[[i]])) {
+      if (is.character(model_list[[i]][[j]])) {
+        indices <- as.numeric(strsplit(model_list[[i]][[j]], "\\_")[[1]])
+        model_list[[i]][[j]] <- model_list[[indices[1]]][[indices[2]]]
+      }
+    }
+  }
+}
+```
+
+
+```{r model details, results='asis'}
+# Smooth nLetters.WD effect and residual plot
+if (model_details) {
+  for (j in seq_len(length(response_vec))) {
+    cat("\n\n\\newpage\n")
+    m <- model_list[[1]][[j]]
+        if (response_vec[j] %in% no_effect) {
+      cat("The 'letters per word' effect was removed from the model after visual
+          inspection since the effect was negligibly small.")
+      cat("\n")
+    } else if (response_vec[j] %in% nonlinear_effect) {
+      plot(m, select = 1, main = paste0("Global ",response_vec[j]," model"))
+    } else {
+      cat("The 'letters per word' effect was estimated linearly after visual
+          inspection of the nonlinear effect.\n\n\n")
+      tab <- summary(m)$p.table
+      tab <- round(tab[which(row.names(tab) == "nLetters.WD"),c(1,2,4)], 4)
+      names(tab)[3] <- "p.value"
+      print(knitr::kable(tab, col.names = "value"))
+      cat("\n")
+    }
+    cat("\n\n\n\n\n\n\n")
+    plot(m$fitted, m$residuals, main = paste0("Global ",response_vec[j]," model"))
+  }
+  cat("\n\n\\newpage\n")
+} else { # if no model details are shown, print a message on (non)linear Letters.WD effects
+  if (length(nonlinear_effect) == 0) {
+    if (length(no_effect) > 0)
+      cat(paste0("The 'letters per word' effects were removed from the model(s) ",
+                 paste(no_effect, collapse = ", ")," since they were negligibly small."))
+    cat("All estimated 'letters per word' effects were estimated as linear effects.\n\n\\newpage\n")
+  } else {
+    if (length(no_effect) > 0) { # if the 'letters per word' was excluded in some model
+      real_nonlinear_effect <- nonlinear_effect[!(nonlinear_effect %in% no_effect)]
+      cat(paste0("The 'letters per word' effects were estimated as nonlinear effects
+               in the model(s) ",paste(real_nonlinear_effect, collapse = ", "),
+               ". The 'letters per word' effects were removed from the model(s) ",
+               paste(no_effect, collapse = ", ")," since they were negligibly small.",
+               " In all other models (if any) the effect was estimated as a linear effect.",
+               "\n\n\\newpage\n"))
+    } else { # if all models contained a 'letters per word' effect
+      cat(paste0("The 'letters per word' effects were estimated as nonlinear effects
+               in the model(s) ",paste(nonlinear_effect, collapse = ", "),
+               ". In all other models the effect was estimated as a linear effect.",
+               "\n\n\\newpage\n"))
+    }
+  }
+}
+```
+
+
+
+```{r model results, results='asis'}
+for (i in seq_len(length(AOIcond_list))) {
+  # retrieve the y limits for plotting over all response variables
+  max_fitted <- sapply(model_list[[i]], function(model) { max(model$fitted.values[model$model$AOI.condition %in% AOIcond_list[[i]]]) })
+  ylim <- c(0, max(max_fitted))
+  
+  for (j in seq_len(length(response_vec))) {
+    # 1) Plot of model predictions
+    res_list <- DPKogHelpers::plot_predictions(model = model_list[[i]][[j]],
+                                               nLetters.WD = nLetters.WD,
+                                               groups_vec = AOIcond_list[[i]],
+                                               model_name = paste("Model",i),
+                                               ylim = ylim)
+    ggsave(plot = res_list$plot, filename = paste0(path_resImages, "plot_m",i,"_", response_vec[j], ".pdf"), width = 8, height = 5)
+    
+    # 2) Table of estimates and model predictions
+    print(knitr::kable(res_list$table))
+    cat("\n") # necessary after printing a kable() in a for loop
+    cat("\\newpage")
+    write.csv(res_list$table, file = paste0(path_resTables, "tab_m",i,"_",response_vec[j],".csv"), row.names = TRUE)
+  }
+}
+```
+
+\newpage
+### Second Model
+```{r model estimation 2, results = 'asis'}
+dat <- dat %>%
+  mutate(var1 = case_when(
+    Condition %in% c("SE", "SC") ~ "synonym",
+    Condition %in% c("RE", "RC") ~ "repetition"
+  ))
+dat <- dat %>%
+  mutate(var2 = case_when(
+    Condition %in% c("SE", "RE") ~ "encapsulation",
+    Condition %in% c("SC", "RC") ~ "coreference"
+  ))
+
+dat_mod2 <- dat[dat$AOI == 1,]
+
+dat_mod2$TRT.L <- dat_mod2$TRT / dat_mod2$nLetters
+dat_mod2$FRT.L <- dat_mod2$FRT / dat_mod2$nLetters
+dat_mod2$RRT.L <- dat_mod2$RRT / dat_mod2$nLetters
+ 
+dat_mod2$var1 <- factor(dat_mod2$var1)
+dat_mod2$var2 <- factor(dat_mod2$var2)
+```
+
+```{r}
+plots <- function(x_var, y_var, col_gr_var, with_errorbar = FALSE) {
+  p <- ggplot(dat_mod2, 
+              aes(x = x_var, y = y_var, color = col_gr_var, group = col_gr_var)) +
+    geom_point(stat = "summary", fun = mean) +
+    geom_line(stat = "summary", fun = mean)
+  if (with_errorbar) {
+    p <- p + stat_summary(fun.data = mean_sdl, fun.args = list(mult = 1), 
+                          geom = "errorbar", width = 0.2)
+  }
+  if(deparse(substitute(x_var)) == "dat_mod2$var1") {
+    p <- p + labs(x = "variable 1", color = "variable 2")
+  } else {
+    p <- p + labs(x = "variable 2", color = "variable 1")
+  }
+  if(deparse(substitute(y_var)) == "dat_mod2$TRT.L") {
+    p <- p + labs(y = "TRT per letter")
+  } else if(deparse(substitute(y_var)) == "dat_mod2$FRT.L") {
+    p <- p + labs(y = "FRT per letter")
+  } else {
+    p <- p + labs(y = "RRT per letter")
+  }
+  
+  return(p)
+}
+
+# PLOT - TRT
+plots(dat_mod2$var1, dat_mod2$TRT.L, dat_mod2$var2)
+cat("\n\n")
+plots(dat_mod2$var1, dat_mod2$TRT.L, dat_mod2$var2, with_errorbar = TRUE)
+cat("\n\n")
+plots(dat_mod2$var2, dat_mod2$TRT.L, dat_mod2$var1)
+cat("\n\n")
+plots(dat_mod2$var2, dat_mod2$TRT.L, dat_mod2$var1, with_errorbar = TRUE)
+cat("\n\n")
+# PLOT - FRT
+plots(dat_mod2$var1, dat_mod2$FRT.L, dat_mod2$var2)
+cat("\n\n")
+plots(dat_mod2$var1, dat_mod2$FRT.L, dat_mod2$var2, with_errorbar = TRUE)
+cat("\n\n")
+plots(dat_mod2$var2, dat_mod2$FRT.L, dat_mod2$var1)
+cat("\n\n")
+plots(dat_mod2$var2, dat_mod2$FRT.L, dat_mod2$var1, with_errorbar = TRUE)
+cat("\n\n")
+# PLOT - RRT
+plots(dat_mod2$var1, dat_mod2$RRT.L, dat_mod2$var2)
+cat("\n\n")
+plots(dat_mod2$var1, dat_mod2$RRT.L, dat_mod2$var2, with_errorbar = TRUE)
+cat("\n\n")
+plots(dat_mod2$var2, dat_mod2$RRT.L, dat_mod2$var1)
+cat("\n\n")
+plots(dat_mod2$var2, dat_mod2$RRT.L, dat_mod2$var1, with_errorbar = TRUE)
+```
+
+```{r}
+#### MODELS
+
+mod_TRT_int <- gam(data = dat_mod2,
+               formula = TRT.L ~ var1 * var2 +
+                 s(Participant, bs = "re") + s(Topic, bs = "re"))
+mod_FRT_int <- gam(data = dat_mod2,
+               formula = FRT.L ~ var1 * var2 +
+                 s(Participant, bs = "re") + s(Topic, bs = "re"))
+mod_RRT_int <- gam(data = dat_mod2,
+               formula = RRT.L ~ var1 * var2 +
+                 s(Participant, bs = "re") + s(Topic, bs = "re"))
+
+###### TRY OUT
+# mod_TRT <- gam(data = dat_mod2,
+#                formula = TRT.L ~ condition +
+#                  s(Participant, bs = "re") + s(Topic, bs = "re"))
+# mod_FRT <- gam(data = dat_mod2,
+#                formula = FRT.L ~ condition +
+#                  s(Participant, bs = "re") + s(Topic, bs = "re"))
+# mod_RRT <- gam(data = dat_mod2,
+#                formula = RRT.L ~ condition +
+#                  s(Participant, bs = "re") + s(Topic, bs = "re"))
+
+```
+
+\newpage
+
+```{r model results 2, results='asis'}
+# print(summary(mod_TRT_int))
+# print(summary(mod_FRT_int))
+# print(summary(mod_RRT_int))
+# print(summary(mod_TRT))
+# print(summary(mod_FRT))
+# print(summary(mod_RRT))
+
+names_res <- c("Estimates", "Std.Error", "p.value")
+
+res_mod_TRT_int <- data.frame(cbind(round(summary(mod_TRT_int)$p.table[, c(1, 2, 4)], 4)))
+res_mod_TRT_int <- rownames_to_column(res_mod_TRT_int, var = "TRT")
+colnames(res_mod_TRT_int) <- c("TRT per Letter", names_res)
+res_mod_FRT_int <- data.frame(cbind(round(summary(mod_FRT_int)$p.table[, c(1, 2, 4)], 4)))
+res_mod_FRT_int <- rownames_to_column(res_mod_FRT_int, var = "FRT")
+colnames(res_mod_FRT_int) <-  c("FRT per Letter", names_res)
+res_mod_RRT_int <- data.frame(cbind(round(summary(mod_RRT_int)$p.table[, c(1, 2, 4)], 4)))
+res_mod_RRT_int <- rownames_to_column(res_mod_RRT_int, var = "RRT")
+colnames(res_mod_RRT_int) <- c("RRT per Letter", names_res)
+
+# res_mod_TRT <- data.frame(cbind(round(summary(mod_TRT)$p.table[, c(1, 2, 4)], 4)))
+# res_mod_TRT <- rownames_to_column(res_mod_TRT, var = "TRT")
+# colnames(res_mod_TRT) <- c("TRT per Letter", names_res)
+# res_mod_FRT <- data.frame(cbind(round(summary(mod_FRT)$p.table[, c(1, 2, 4)], 4)))
+# res_mod_FRT <- rownames_to_column(res_mod_FRT, var = "FRT")
+# colnames(res_mod_FRT) <-  c("FRT per Letter", names_res)
+# res_mod_RRT <- data.frame(cbind(round(summary(mod_RRT)$p.table[, c(1, 2, 4)], 4)))
+# res_mod_RRT <- rownames_to_column(res_mod_RRT, var = "RRT")
+# colnames(res_mod_RRT) <- c("RRT per Letter", names_res)
+
+kable(res_mod_TRT_int)
+kable(res_mod_FRT_int)
+kable(res_mod_RRT_int)
+
+# kable(res_mod_TRT)
+# kable(res_mod_FRT)
+# kable(res_mod_RRT)
+
+rand_eff_message <- function(mod) {
+  message <- c()
+  if(all(summary(mod)$s.table[,4] < 0.05)) {
+    message <- paste0("Both random effects, for ",
+                      substr(names(summary(mod)$s.table[,4])[1], 3,
+                             nchar(names(summary(mod)$s.table[,4])[1])-1),
+                      " and ",
+                      substr(names(summary(mod)$s.table[,4])[2], 3,
+                             nchar(names(summary(mod)$s.table[,4])[2])-1),
+                      ", are significant w.r.t alpha = 0.05.")
+  } else {
+    if(summary(mod)$s.table[1,4] < 0.05) {
+      message <- paste0("The random effect ",
+                        names(summary(mod)$s.table[,4])[1],
+                        " is significant w.r.t alpha = 0.05.")
+    } else if(summary(mod)$s.table[2,4] < 0.05) {
+      message <- paste0("The random effect ",
+                        names(summary(mod)$s.table[,4])[2],
+                        " is significant w.r.t alpha = 0.05.")
+    } else {
+      message <- "No random effect is significant."
+    }
+  }
+  return(message)
+}
+
+```
+
+For the TRT model: `r rand_eff_message(mod_TRT_int)`
+
+For the FRT model: `r rand_eff_message(mod_FRT_int)`
+
+For the RRT model: `r rand_eff_message(mod_RRT_int)`
+
+\newpage
+### Hypothesis tests
+```{r model results hypothesis tests, results='asis'}
+if (is.null(hypo_list)) {
+  message <- "No hypothesis tests were performed"
+} else if (!is.null(hypo_list)) {
+  message <- c()
+  for (i in seq_len(length(AOIcond_list))) {
+    cat(paste0("#### ",names(AOIcond_list)[i]))
+    if (names(AOIcond_list)[i] %in% names(hypo_list)) {
+      hypo_index <- match(names(AOIcond_list)[i], names(hypo_list))
+      # Results table for hypothesis tests
+      p <- DPKogHelpers::create_pTable(model_list = model_list[[i]],
+                                       hypo_vec = hypo_list[[hypo_index]],
+                                       holm_correction = TRUE)
+      print(knitr::kable(p$pTable))
+      cat("\n") # necessary after printing a kable() in a for loop
+      cat(paste0(p$info,"\n\n"))
+      write.csv(p$pTable, file = paste0(path_resTables, "pTab_m",i,".csv"), row.names = TRUE)
+    } else {
+      cat("\nNo hypotheses were tested\n\n")
+    }
+  }
+}
+```
+<!-- print the messages -->
+`r DPKogHelpers::print_rmdMessages(message, title = NULL)`
+
