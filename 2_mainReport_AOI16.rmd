@@ -260,8 +260,11 @@ for (i in seq_len(length(AOIcond_list))) {
 ```
 
 \newpage
-### Second Model (for AOI 1)
-```{r model estimation 2, results = 'asis'}
+## Separate models for p-value comparison
+
+### Model for AOI 1
+
+```{r separate model estimation, results = 'asis'}
 dat <- dat %>%
   mutate(var1 = case_when(
     Condition %in% c("SE", "SC") ~ "synonym",
@@ -272,175 +275,7 @@ dat <- dat %>%
     Condition %in% c("SE", "RE") ~ "encapsulation",
     Condition %in% c("SC", "RC") ~ "coreference"
   ))
-
-dat_mod2 <- dat[dat$AOI == 1,]
-
-dat_mod2$TRT.L <- dat_mod2$TRT / dat_mod2$nLetters
-dat_mod2$FRT.L <- dat_mod2$FRT / dat_mod2$nLetters
-dat_mod2$RRT.L <- dat_mod2$RRT / dat_mod2$nLetters
- 
-dat_mod2$var1 <- factor(dat_mod2$var1)
-dat_mod2$var2 <- factor(dat_mod2$var2)
 ```
-
-```{r}
-plots <- function(x_var, y_var, col_gr_var, with_errorbar = FALSE) {
-  p <- ggplot(dat_mod2, 
-              aes(x = x_var, y = y_var, color = col_gr_var, group = col_gr_var)) +
-    geom_point(stat = "summary", fun = mean) +
-    geom_line(stat = "summary", fun = mean)
-  if (with_errorbar) {
-    p <- p + stat_summary(fun.data = mean_sdl, fun.args = list(mult = 1), 
-                          geom = "errorbar", width = 0.2)
-  }
-  if(deparse(substitute(x_var)) == "dat_mod2$var1") {
-    p <- p + labs(x = "variable 1", color = "variable 2")
-  } else {
-    p <- p + labs(x = "variable 2", color = "variable 1")
-  }
-  if(deparse(substitute(y_var)) == "dat_mod2$TRT.L") {
-    p <- p + labs(y = "TRT per letter")
-  } else if(deparse(substitute(y_var)) == "dat_mod2$FRT.L") {
-    p <- p + labs(y = "FRT per letter")
-  } else {
-    p <- p + labs(y = "RRT per letter")
-  }
-  
-  return(p)
-}
-
-# PLOT - TRT
-plots(dat_mod2$var1, dat_mod2$TRT.L, dat_mod2$var2)
-cat("\n\n")
-plots(dat_mod2$var1, dat_mod2$TRT.L, dat_mod2$var2, with_errorbar = TRUE)
-cat("\n\n")
-plots(dat_mod2$var2, dat_mod2$TRT.L, dat_mod2$var1)
-cat("\n\n")
-plots(dat_mod2$var2, dat_mod2$TRT.L, dat_mod2$var1, with_errorbar = TRUE)
-cat("\n\n")
-# PLOT - FRT
-plots(dat_mod2$var1, dat_mod2$FRT.L, dat_mod2$var2)
-cat("\n\n")
-plots(dat_mod2$var1, dat_mod2$FRT.L, dat_mod2$var2, with_errorbar = TRUE)
-cat("\n\n")
-plots(dat_mod2$var2, dat_mod2$FRT.L, dat_mod2$var1)
-cat("\n\n")
-plots(dat_mod2$var2, dat_mod2$FRT.L, dat_mod2$var1, with_errorbar = TRUE)
-cat("\n\n")
-# PLOT - RRT
-plots(dat_mod2$var1, dat_mod2$RRT.L, dat_mod2$var2)
-cat("\n\n")
-plots(dat_mod2$var1, dat_mod2$RRT.L, dat_mod2$var2, with_errorbar = TRUE)
-cat("\n\n")
-plots(dat_mod2$var2, dat_mod2$RRT.L, dat_mod2$var1)
-cat("\n\n")
-plots(dat_mod2$var2, dat_mod2$RRT.L, dat_mod2$var1, with_errorbar = TRUE)
-```
-
-```{r}
-#### MODELS
-
-mod_TRT_int <- gam(data = dat_mod2,
-               formula = TRT.L ~ var1 * var2 +
-                 s(Participant, bs = "re") + s(Topic, bs = "re"))
-mod_FRT_int <- gam(data = dat_mod2,
-               formula = FRT.L ~ var1 * var2 +
-                 s(Participant, bs = "re") + s(Topic, bs = "re"))
-mod_RRT_int <- gam(data = dat_mod2,
-               formula = RRT.L ~ var1 * var2 +
-                 s(Participant, bs = "re") + s(Topic, bs = "re"))
-
-###### TRY OUT
-# mod_TRT <- gam(data = dat_mod2,
-#                formula = TRT.L ~ condition +
-#                  s(Participant, bs = "re") + s(Topic, bs = "re"))
-# mod_FRT <- gam(data = dat_mod2,
-#                formula = FRT.L ~ condition +
-#                  s(Participant, bs = "re") + s(Topic, bs = "re"))
-# mod_RRT <- gam(data = dat_mod2,
-#                formula = RRT.L ~ condition +
-#                  s(Participant, bs = "re") + s(Topic, bs = "re"))
-
-```
-
-\newpage
-
-```{r model results 2, results='asis'}
-# print(summary(mod_TRT_int))
-# print(summary(mod_FRT_int))
-# print(summary(mod_RRT_int))
-# print(summary(mod_TRT))
-# print(summary(mod_FRT))
-# print(summary(mod_RRT))
-
-names_res <- c("Estimates", "Std.Error", "p.value")
-
-res_mod_TRT_int <- data.frame(cbind(round(summary(mod_TRT_int)$p.table[, c(1, 2, 4)], 4)))
-res_mod_TRT_int <- rownames_to_column(res_mod_TRT_int, var = "TRT")
-colnames(res_mod_TRT_int) <- c("TRT per Letter", names_res)
-res_mod_FRT_int <- data.frame(cbind(round(summary(mod_FRT_int)$p.table[, c(1, 2, 4)], 4)))
-res_mod_FRT_int <- rownames_to_column(res_mod_FRT_int, var = "FRT")
-colnames(res_mod_FRT_int) <-  c("FRT per Letter", names_res)
-res_mod_RRT_int <- data.frame(cbind(round(summary(mod_RRT_int)$p.table[, c(1, 2, 4)], 4)))
-res_mod_RRT_int <- rownames_to_column(res_mod_RRT_int, var = "RRT")
-colnames(res_mod_RRT_int) <- c("RRT per Letter", names_res)
-
-# res_mod_TRT <- data.frame(cbind(round(summary(mod_TRT)$p.table[, c(1, 2, 4)], 4)))
-# res_mod_TRT <- rownames_to_column(res_mod_TRT, var = "TRT")
-# colnames(res_mod_TRT) <- c("TRT per Letter", names_res)
-# res_mod_FRT <- data.frame(cbind(round(summary(mod_FRT)$p.table[, c(1, 2, 4)], 4)))
-# res_mod_FRT <- rownames_to_column(res_mod_FRT, var = "FRT")
-# colnames(res_mod_FRT) <-  c("FRT per Letter", names_res)
-# res_mod_RRT <- data.frame(cbind(round(summary(mod_RRT)$p.table[, c(1, 2, 4)], 4)))
-# res_mod_RRT <- rownames_to_column(res_mod_RRT, var = "RRT")
-# colnames(res_mod_RRT) <- c("RRT per Letter", names_res)
-
-kable(res_mod_TRT_int)
-kable(res_mod_FRT_int)
-kable(res_mod_RRT_int)
-
-# kable(res_mod_TRT)
-# kable(res_mod_FRT)
-# kable(res_mod_RRT)
-
-rand_eff_message <- function(mod) {
-  message <- c()
-  if(all(summary(mod)$s.table[,4] < 0.05)) {
-    message <- paste0("Both random effects, for ",
-                      substr(names(summary(mod)$s.table[,4])[1], 3,
-                             nchar(names(summary(mod)$s.table[,4])[1])-1),
-                      " and ",
-                      substr(names(summary(mod)$s.table[,4])[2], 3,
-                             nchar(names(summary(mod)$s.table[,4])[2])-1),
-                      ", are significant w.r.t alpha = 0.05.")
-  } else {
-    if(summary(mod)$s.table[1,4] < 0.05) {
-      message <- paste0("The random effect ",
-                        names(summary(mod)$s.table[,4])[1],
-                        " is significant w.r.t alpha = 0.05.")
-    } else if(summary(mod)$s.table[2,4] < 0.05) {
-      message <- paste0("The random effect ",
-                        names(summary(mod)$s.table[,4])[2],
-                        " is significant w.r.t alpha = 0.05.")
-    } else {
-      message <- "No random effect is significant."
-    }
-  }
-  return(message)
-}
-
-```
-
-For the TRT model: `r rand_eff_message(mod_TRT_int)`
-
-For the FRT model: `r rand_eff_message(mod_FRT_int)`
-
-For the RRT model: `r rand_eff_message(mod_RRT_int)`
-
-\newpage
-## Separate models for p-value comparison
-
-### Model for AOI 1
 
 ```{r}
 dat_mod1 <- dat[dat$AOI == 1,]
@@ -451,6 +286,7 @@ dat_mod1$RRT.L <- dat_mod1$RRT / dat_mod1$nLetters
  
 dat_mod1$var1 <- factor(dat_mod1$var1)
 dat_mod1$var2 <- factor(dat_mod1$var2)
+
 mod_TRT_int1 <- gam(data = dat_mod1,
                formula = TRT.L ~ var1 * var2 +
                  s(Participant, bs = "re") + s(Topic, bs = "re"))
@@ -478,10 +314,6 @@ res_mod_RRT_int1 <- data.frame(cbind(round(summary(mod_RRT_int1)$p.table[, c(1, 
 res_mod_RRT_int1 <- rownames_to_column(res_mod_RRT_int1, var = "RRT")
 colnames(res_mod_RRT_int1) <- c("RRT per Letter", names_res)
 
-kable(res_mod_TRT_int1)
-kable(res_mod_FRT_int1)
-kable(res_mod_RRT_int1)
-
 rand_eff_message <- function(mod) {
   message <- c()
   if(all(summary(mod)$s.table[,4] < 0.05)) {
@@ -507,29 +339,134 @@ rand_eff_message <- function(mod) {
   }
   return(message)
 }
-
 ```
 
-For the TRT model: `r rand_eff_message(mod_TRT_int1)`
+```{r}
+plots <- function(x_var, y_var, col_gr_var, model_data = dat_mod1, with_errorbar = FALSE) {
+  p <- ggplot(model_data, 
+              aes(x = x_var, y = y_var, color = col_gr_var, group = col_gr_var)) +
+    geom_point(stat = "summary", fun = mean) +
+    geom_line(stat = "summary", fun = mean)
+  if (with_errorbar) {
+    p <- p + stat_summary(fun.data = mean_sdl, fun.args = list(mult = 1), 
+                          geom = "errorbar", width = 0.2)
+  }
+  if(deparse(substitute(x_var)) == sprintf("%s$var1", deparse(substitute(model_data)))) {
+    p <- p + labs(x = "variable 1", color = "variable 2")
+  } else {
+    p <- p + labs(x = "variable 2", color = "variable 1")
+  }
+  if(deparse(substitute(y_var)) == sprintf("%s$var1", deparse(substitute(model_data)))) {
+    p <- p + labs(y = "TRT per letter")
+  } else if(deparse(substitute(y_var)) == sprintf("%s$FRT.L", deparse(substitute(model_data)))) {
+    p <- p + labs(y = "FRT per letter")
+  } else {
+    p <- p + labs(y = "RRT per letter")
+  }
+  
+  return(p)
+}
+```
 
-For the FRT model: `r rand_eff_message(mod_FRT_int1)`
-
-For the RRT model: `r rand_eff_message(mod_RRT_int1)`
-
-```{r pairwise_aoi1, results='asis', echo=FALSE}
+```{r}
 contrast_matrix <- list(
   "SC vs SE" = c(0, 1, 0, -1),
   "RC vs RE" = c(1, 0, -1, 0),
   "SC vs RC" = c(-1, 1, 0, 0),
   "SE vs RE" = c(0, 0, -1, 1)
 )
+```
+
+#### TRT model
+
+```{r}
+kable(res_mod_TRT_int1)
+```
+
+For the TRT model: `r rand_eff_message(mod_TRT_int1)`
+
+**Pairwise comparisons**
+
+```{r}
 kable(as.data.frame(contrast(emmeans(mod_TRT_int1, specs = c("var1", "var2")), 
                              method = contrast_matrix)))
+```
+
+**Plots**
+
+```{r}
+# PLOT - TRT
+plots(dat_mod1$var1, dat_mod1$TRT.L, dat_mod1$var2, model_data = dat_mod1)
+cat("\n\n")
+plots(dat_mod1$var1, dat_mod1$TRT.L, dat_mod1$var2, model_data = dat_mod1, with_errorbar = TRUE)
+cat("\n\n")
+plots(dat_mod1$var2, dat_mod1$TRT.L, dat_mod1$var1, model_data = dat_mod1)
+cat("\n\n")
+plots(dat_mod1$var2, dat_mod1$TRT.L, dat_mod1$var1, model_data = dat_mod1, with_errorbar = TRUE)
+cat("\n\n")
+```
+
+\newpage
+
+#### FRT model
+
+```{r}
+kable(res_mod_FRT_int1)
+```
+
+For the FRT model: `r rand_eff_message(mod_FRT_int1)`
+
+**Pairwise comparisons**
+
+```{r}
 kable(as.data.frame(contrast(emmeans(mod_FRT_int1, specs = c("var1", "var2")),
                              method = contrast_matrix)))
+```
+
+**Plots**
+
+```{r}
+# PLOT - FRT
+plots(dat_mod1$var1, dat_mod1$FRT.L, dat_mod1$var2, model_data = dat_mod1)
+cat("\n\n")
+plots(dat_mod1$var1, dat_mod1$FRT.L, dat_mod1$var2, model_data = dat_mod1, with_errorbar = TRUE)
+cat("\n\n")
+plots(dat_mod1$var2, dat_mod1$FRT.L, dat_mod1$var1, model_data = dat_mod1)
+cat("\n\n")
+plots(dat_mod1$var2, dat_mod1$FRT.L, dat_mod1$var1, model_data = dat_mod1, with_errorbar = TRUE)
+cat("\n\n")
+```
+
+\newpage
+
+#### RRT model
+
+```{r}
+kable(res_mod_RRT_int1)
+```
+
+For the RRT model: `r rand_eff_message(mod_RRT_int1)`
+
+**Pairwise comparisons**
+```{r}
 kable(as.data.frame(contrast(emmeans(mod_RRT_int1, specs = c("var1", "var2")),
                              method = contrast_matrix)))
 ```
+
+**Plots**
+
+```{r}
+# PLOT - RRT
+plots(dat_mod1$var1, dat_mod1$RRT.L, dat_mod1$var2, model_data = dat_mod1)
+cat("\n\n")
+plots(dat_mod1$var1, dat_mod1$RRT.L, dat_mod1$var2, model_data = dat_mod1, with_errorbar = TRUE)
+cat("\n\n")
+plots(dat_mod1$var2, dat_mod1$RRT.L, dat_mod1$var1, model_data = dat_mod1)
+cat("\n\n")
+plots(dat_mod1$var2, dat_mod1$RRT.L, dat_mod1$var1, model_data = dat_mod1, with_errorbar = TRUE)
+```
+
+\newpage
 
 ### Model for AOI 6
 
@@ -569,10 +506,6 @@ res_mod_RRT_int6 <- data.frame(cbind(round(summary(mod_RRT_int6)$p.table[, c(1, 
 res_mod_RRT_int6 <- rownames_to_column(res_mod_RRT_int6, var = "RRT")
 colnames(res_mod_RRT_int6) <- c("RRT per Letter", names_res)
 
-kable(res_mod_TRT_int6)
-kable(res_mod_FRT_int6)
-kable(res_mod_RRT_int6)
-
 rand_eff_message <- function(mod) {
   message <- c()
   if(all(summary(mod)$s.table[,4] < 0.05)) {
@@ -601,12 +534,6 @@ rand_eff_message <- function(mod) {
 
 ```
 
-For the TRT model: `r rand_eff_message(mod_TRT_int6)`
-
-For the FRT model: `r rand_eff_message(mod_FRT_int6)`
-
-For the RRT model: `r rand_eff_message(mod_RRT_int6)`
-
 ```{r pairwise_aoi6, results='asis', echo=FALSE}
 contrast_matrix <- list(
   "SC vs SE" = c(0, 1, 0, -1),
@@ -614,14 +541,97 @@ contrast_matrix <- list(
   "SC vs RC" = c(-1, 1, 0, 0),
   "SE vs RE" = c(0, 0, -1, 1)
 )
+```
+
+#### TRT model
+
+```{r}
+kable(res_mod_TRT_int6)
+```
+
+For the TRT model: `r rand_eff_message(mod_TRT_int6)`
+
+**Pairwise comparisons**
+
+```{r}
 kable(as.data.frame(contrast(emmeans(mod_TRT_int6, specs = c("var1", "var2")), 
-                             method = contrast_matrix)))
-kable(as.data.frame(contrast(emmeans(mod_FRT_int6, specs = c("var1", "var2")),
-                             method = contrast_matrix)))
-kable(as.data.frame(contrast(emmeans(mod_RRT_int6, specs = c("var1", "var2")),
                              method = contrast_matrix)))
 ```
 
+**Plots**
+
+```{r}
+# PLOT - TRT
+plots(dat_mod6$var1, dat_mod6$TRT.L, dat_mod6$var2, model_data = dat_mod6)
+cat("\n\n")
+plots(dat_mod6$var1, dat_mod6$TRT.L, dat_mod6$var2, model_data = dat_mod6, with_errorbar = TRUE)
+cat("\n\n")
+plots(dat_mod6$var2, dat_mod6$TRT.L, dat_mod6$var1, model_data = dat_mod6)
+cat("\n\n")
+plots(dat_mod6$var2, dat_mod6$TRT.L, dat_mod6$var1, model_data = dat_mod6, with_errorbar = TRUE)
+cat("\n\n")
+```
+
+\newpage
+#### FRT model
+
+```{r}
+kable(res_mod_FRT_int6)
+```
+
+For the FRT model: `r rand_eff_message(mod_FRT_int6)`
+
+**Pairwise comparisons**
+
+```{r}
+kable(as.data.frame(contrast(emmeans(mod_FRT_int6, specs = c("var1", "var2")), 
+                             method = contrast_matrix)))
+```
+
+**Plots**
+
+```{r}
+# PLOT - FRT
+plots(dat_mod6$var1, dat_mod6$FRT.L, dat_mod6$var2, model_data = dat_mod6)
+cat("\n\n")
+plots(dat_mod6$var1, dat_mod6$FRT.L, dat_mod6$var2, model_data = dat_mod6, with_errorbar = TRUE)
+cat("\n\n")
+plots(dat_mod6$var2, dat_mod6$FRT.L, dat_mod6$var1, model_data = dat_mod6)
+cat("\n\n")
+plots(dat_mod6$var2, dat_mod6$FRT.L, dat_mod6$var1, model_data = dat_mod6, with_errorbar = TRUE)
+cat("\n\n")
+```
+
+\newpage
+
+#### RRT model
+
+```{r}
+kable(res_mod_RRT_int6)
+```
+
+For the RRT model: `r rand_eff_message(mod_RRT_int6)`
+
+**Pairwise comparisons**
+
+```{r}
+kable(as.data.frame(contrast(emmeans(mod_RRT_int6, specs = c("var1", "var2")), 
+                             method = contrast_matrix)))
+```
+
+**Plots**
+
+```{r}
+# PLOT - RRT
+plots(dat_mod6$var1, dat_mod6$RRT.L, dat_mod6$var2, model_data = dat_mod6)
+cat("\n\n")
+plots(dat_mod6$var1, dat_mod6$RRT.L, dat_mod6$var2, model_data = dat_mod6, with_errorbar = TRUE)
+cat("\n\n")
+plots(dat_mod6$var2, dat_mod6$RRT.L, dat_mod6$var1, model_data = dat_mod6)
+cat("\n\n")
+plots(dat_mod6$var2, dat_mod6$RRT.L, dat_mod6$var1, model_data = dat_mod6, with_errorbar = TRUE)
+cat("\n\n")
+```
 
 \newpage
 
