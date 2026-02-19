@@ -45,8 +45,10 @@ files <- as.list(files[grepl("xls", tolower(files))])
 # read data
 dat_list <- suppressWarnings(lapply(files, function(file) readxl::read_excel(paste0(path_rawData, file), sheet = 1, na = "."))) # data specific
 
-# only choose the first data set in the list, which is the new data
-dat_list[[2]] <- NULL
+# first list element: new data
+# second list element: old data
+# we choose the old data here 
+dat_list[[1]] <- NULL
 ```
 
 #### Dimension of the data

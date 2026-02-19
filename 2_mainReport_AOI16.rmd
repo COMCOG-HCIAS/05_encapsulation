@@ -33,14 +33,14 @@ no_effect <- c() # set to c("RRD") to remove the word effect for RRD
 AOIcond_list <- list(
   "Model1" = c(
   "RC_1", "RE_1", "SC_1", "SE_1",
-  # "RC_2", "RE_2", "SC_2", "SE_2",
-  # "RC_3", "RE_3", "SC_3", "SE_3",
-  # "RC_4", "RE_4", "SC_4", "SE_4",
-  # "RC_5", "RE_5", "SC_5", "SE_5",
-  "RC_6", "RE_6", "SC_6", "SE_6"
-  # "RC_7", "RE_7", "SC_7", "SE_7",
-  # "RC_8", "RE_8", "SC_8", "SE_8",
-  # "RC_9", "RE_9", "SC_9", "SE_9"
+  "RC_2", "RE_2", "SC_2", "SE_2",
+  "RC_3", "RE_3", "SC_3", "SE_3",
+  "RC_4", "RE_4", "SC_4", "SE_4",
+  "RC_5", "RE_5", "SC_5", "SE_5",
+  "RC_6", "RE_6", "SC_6", "SE_6",
+  "RC_7", "RE_7", "SC_7", "SE_7",
+  "RC_8", "RE_8", "SC_8", "SE_8",
+  "RC_9", "RE_9", "SC_9", "SE_9"
   )
 )
 ### hypotheses, each comparing two AOI.conditions
@@ -102,29 +102,34 @@ dat <- dat %>% filter(AOI.condition %in% AOIcond_vec) %>%
 #   theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 6)) +
 #   ylab("Letters per word") +
 #   geom_hline(yintercept = nLetters.WD, lty = 2)
+# 
+# ggplot(dat,
+#   aes(x = AOI.condition, y = nLetters.WD)) +
+#   geom_boxplot() +
+#   theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 6)) +
+#   ylab("Letters per word") +
+#   geom_hline(yintercept = nLetters.WD, lty = 2)
 
 # Two plots for all 36 levels with all AOIs
-# ggplot(dat[dat$AOI.condition %in% levels(dat$AOI.condition)[1:18], ],
-#   aes(x = AOI.condition, y = nLetters.WD)) +
-#   geom_boxplot() +
-#   theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 6)) +
-#   ylab("Letters per word") +
-#   geom_hline(yintercept = nLetters.WD, lty = 2)
-# 
-# ggplot(dat[dat$AOI.condition %in% levels(dat$AOI.condition)[19:36], ],
-#   aes(x = AOI.condition, y = nLetters.WD)) +
-#   geom_boxplot() +
-#   theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 6)) +
-#   ylab("Letters per word") +
-#   geom_hline(yintercept = nLetters.WD, lty = 2)
-
-ggplot(dat,
+ggplot(dat[dat$AOI.condition %in% levels(dat$AOI.condition)[1:18], ],
   aes(x = AOI.condition, y = nLetters.WD)) +
   geom_boxplot() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 6)) +
   ylab("Letters per word") +
   geom_hline(yintercept = nLetters.WD, lty = 2)
 ```
+
+
+```{r plot nLetters.WD2, fig.height=4}
+ggplot(dat[dat$AOI.condition %in% levels(dat$AOI.condition)[19:36], ],
+  aes(x = AOI.condition, y = nLetters.WD)) +
+  geom_boxplot() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 6)) +
+  ylab("Letters per word") +
+  geom_hline(yintercept = nLetters.WD, lty = 2)
+```
+
+\newpage
 
 #### Observations per AOI.condition
 ```{r table aoi.conditions}
@@ -139,7 +144,7 @@ knitr::kable(tab)
 
 
 \newpage
-```{r model estimation, results = 'asis', cache = TRUE}
+```{r model estimation, results = 'asis', cache = TRUE, fig.height=4}
 # In order to estimate the nLetters.WD effect as good as possible all AOI.conditions are thrown together into one big model. The following model_list contains this big model once for each specified model. Only if the intercept between two models differs, then the big model is reestimated.
 model_list <- lapply(seq_len(length(AOIcond_list)), function(i) {
   m_list <- lapply(seq_len(length(response_vec)), function(j) {
