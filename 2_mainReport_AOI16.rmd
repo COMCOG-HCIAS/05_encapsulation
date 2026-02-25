@@ -361,7 +361,8 @@ plots <- function(x_var, y_var, col_gr_var, model_data = dat_mod1, with_errorbar
   } else {
     p <- p + labs(x = "variable 2", color = "variable 1")
   }
-  if(deparse(substitute(y_var)) == sprintf("%s$var1", deparse(substitute(model_data)))) {
+  
+  if(deparse(substitute(y_var)) == sprintf("%s$TRT.L", deparse(substitute(model_data)))) {
     p <- p + labs(y = "TRT per letter")
   } else if(deparse(substitute(y_var)) == sprintf("%s$FRT.L", deparse(substitute(model_data)))) {
     p <- p + labs(y = "FRT per letter")
